@@ -12,7 +12,7 @@ export default function Home() {
       </div>
 
       {/* Immersive Center Game Environment Canvas */}
-      <div className="flex w-full flex-grow items-center justify-center">
+      <div className="flex w-full grow items-center justify-center">
         <TypingEngine />
       </div>
 

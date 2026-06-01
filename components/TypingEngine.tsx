@@ -86,7 +86,7 @@ export default function TypingEngine() {
         className="relative grid h-32 w-full max-w-5xl grid-cols-3 items-center justify-center overflow-hidden px-4"
       >
         {/* LEFT SLOT: Previous Word */}
-        <div className="pointer-events-none flex w-full justify-end overflow-hidden pr-16 text-2xl font-bold text-zinc-800 opacity-30 select-none">
+        <div className="pointer-events-none flex w-full justify-end overflow-hidden pr-16 text-2xl font-bold text-zinc-700 line-through opacity-50 select-none">
           <AnimatePresence mode="popLayout">
             <motion.span
               key={`prev-${currentIndex}`}
@@ -179,7 +179,7 @@ export default function TypingEngine() {
           </AnimatePresence>
         </div>{" "}
         {/* RIGHT SLOT: Next Word */}
-        <div className="pointer-events-none flex w-full justify-start overflow-hidden pl-16 text-2xl font-bold text-zinc-600 opacity-40 select-none">
+        <div className="pointer-events-none flex w-full justify-start overflow-hidden pl-16 text-2xl font-bold text-zinc-600 opacity-60 select-none">
           <AnimatePresence mode="popLayout">
             <motion.span
               key={`next-${currentIndex}`}
