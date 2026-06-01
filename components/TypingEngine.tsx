@@ -152,7 +152,7 @@ export default function TypingEngine() {
             <button
               key={tier}
               onClick={() => setDifficulty(tier)}
-              className={`rounded px-2 py-0.5 font-bold tracking-wider lowercase uppercase transition-all ${
+              className={`rounded px-2 py-0.5 font-bold tracking-wider lowercase transition-all ${
                 difficulty === tier
                   ? "scale-105 bg-zinc-100 font-black text-zinc-950"
                   : "text-zinc-500 hover:text-zinc-300"
