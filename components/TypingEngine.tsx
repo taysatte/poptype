@@ -100,31 +100,39 @@ export default function TypingEngine() {
             </motion.span>
           </AnimatePresence>
         </div>
-
         {/* CENTER SLOT: Active Typing Target */}
         <div className="relative flex h-full w-full items-center justify-center text-6xl font-black tracking-tight">
           <AnimatePresence mode="popLayout">
             <motion.div
               key={`current-${currentIndex}`}
-              initial={{ x: "100%", opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: "-100%", opacity: 0 }}
-              transition={{ type: "spring", stiffness: 400, damping: 32 }}
+              initial={{ x: "100%", opacity: 0, scale: 0.95 }}
+              animate={{ x: 0, opacity: 1, scale: 1 }}
+              // The "Pop Off" Exit Variant: Snaps out down to 70% scale while flying left
+              exit={{
+                x: "-120%",
+                opacity: 0,
+                scale: 0.7,
+                filter: "blur(4px)", // Optional: adding a micro motion blur gives it a "high velocity" feel
+              }}
+              transition={{
+                type: "spring",
+                stiffness: 450, // Slightly higher stiffness on the exit to clear it out aggressively
+                damping: 28, // Lower damping allows it to snap out without dragging
+              }}
               className="absolute flex items-center justify-center"
             >
               {currentWord.split("").map((char, index) => {
-                let colorClass = "text-zinc-700" // Upcoming character default
+                let colorClass = "text-zinc-700"
                 let shouldPop = false
 
                 if (index < typedValue.length) {
                   if (typedValue[index] === currentWord[index]) {
-                    colorClass = "text-zinc-50" // Correctly typed
-                    // Only pop if it was just typed correctly
+                    colorClass = "text-zinc-50"
                     if (index === typedValue.length - 1 && !isError) {
                       shouldPop = true
                     }
                   } else {
-                    colorClass = "text-red-500 bg-red-500/10 rounded-sm" // Highlight the error index
+                    colorClass = "text-red-500 bg-red-500/10 rounded-sm"
                   }
                 }
 
@@ -153,7 +161,6 @@ export default function TypingEngine() {
                       </span>
                     )}
 
-                    {/* Position cursor at the end of what has been typed */}
                     {index === typedValue.length && (
                       <motion.div
                         layoutId="typing-cursor"
@@ -170,8 +177,7 @@ export default function TypingEngine() {
               })}
             </motion.div>
           </AnimatePresence>
-        </div>
-
+        </div>{" "}
         {/* RIGHT SLOT: Next Word */}
         <div className="pointer-events-none flex w-full justify-start overflow-hidden pl-16 text-2xl font-bold text-zinc-600 opacity-40 select-none">
           <AnimatePresence mode="popLayout">
@@ -188,7 +194,6 @@ export default function TypingEngine() {
           </AnimatePresence>
         </div>
       </div>
-
       {/* Core Hidden Event Capturer */}
       <input
         ref={inputRef}
@@ -201,7 +206,6 @@ export default function TypingEngine() {
         autoCorrect="off"
         spellCheck="false"
       />
-
       <div className="mt-16 animate-pulse text-xs tracking-widest text-zinc-600 uppercase">
         [ system active: start typing to fire ]
       </div>
