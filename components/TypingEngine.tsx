@@ -8,7 +8,7 @@ const SAMPLE_WORDS = [
   "tailwind",
   "framer",
   "motion",
-  "shndcn",
+  "shadcn",
   "typing",
   "engine",
   "canvas",
@@ -24,10 +24,11 @@ export default function TypingEngine() {
 
   const inputRef = useRef<HTMLInputElement>(null)
 
+  // Calculate our 3-word window dynamically safely around array bounds
+  const prevWord = currentIndex > 0 ? wordQueue[currentIndex - 1] : ""
   const currentWord = wordQueue[currentIndex] || ""
   const nextWord = wordQueue[(currentIndex + 1) % wordQueue.length] || ""
 
-  // Enforce global area focus targeting
   useEffect(() => {
     inputRef.current?.focus()
   }, [currentIndex])
@@ -35,7 +36,7 @@ export default function TypingEngine() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.toLowerCase()
 
-    // Exact Word Match Trigger Loop (Zero-Space Completion)
+    // Zero-Space Completion Match
     if (value === currentWord) {
       setTypedValue("")
       setCorrectCharCount(0)
@@ -43,14 +44,11 @@ export default function TypingEngine() {
       return
     }
 
-    // Step-by-step sequential string character match validation
     if (currentWord.startsWith(value)) {
       setTypedValue(value)
       setCorrectCharCount(value.length)
     } else {
-      // Prevent input value change if it deviates from path accuracy limits
-      // This enforces clean muscle-memory corrections
-      const shakeElement = document.getElementById("word-canvas-wrapper")
+      const shakeElement = document.getElementById("carousel-viewport")
       if (shakeElement) {
         shakeElement.classList.add("animate-shake")
         setTimeout(() => shakeElement.classList.remove("animate-shake"), 150)
@@ -60,66 +58,107 @@ export default function TypingEngine() {
 
   return (
     <div
-      className="flex min-h-[500px] flex-col items-center justify-center font-mono select-none"
+      className="flex min-h-[500px] w-full flex-col items-center justify-center font-mono select-none"
       onClick={() => inputRef.current?.focus()}
     >
-      {/* Target Canvas Wrapper */}
-      <div className="flex h-32 w-full max-w-4xl items-baseline justify-center gap-12 overflow-hidden px-4">
-        {/* Active Target Component Container */}
-        <div
-          id="word-canvas-wrapper"
-          className="flex items-center text-6xl font-black tracking-tight select-none"
-        >
-          {currentWord.split("").map((char, index) => {
-            let colorClass = "text-zinc-700" // Upcoming character colors
-            let shouldPop = false
-
-            if (index < correctCharCount) {
-              colorClass = "text-zinc-50" // Completed characters
-              shouldPop = true
-            }
-
-            return (
-              <div
-                key={`${currentIndex}-${index}`}
-                className="char-container w-[42px]"
-              >
-                {shouldPop ? (
-                  <motion.span
-                    initial={{ scale: 1 }}
-                    animate={{ scale: [1, 1.25, 1] }}
-                    transition={{
-                      duration: 0.12, // Ultra-fast frame duration
-                      ease: [0.175, 0.885, 0.32, 1.275], // Custom elastic cubic-bezier
-                    }}
-                    className={`inline-block ${colorClass}`}
-                  >
-                    {char}
-                  </motion.span>
-                ) : (
-                  <span className={colorClass}>{char}</span>
-                )}
-
-                {/* Active Underline Blinking Block Cursor Indicator */}
-                {index === correctCharCount && (
-                  <motion.div
-                    layoutId="typing-cursor"
-                    className="absolute right-0 bottom-[-10px] left-0 h-[3px] bg-zinc-200"
-                    transition={{ type: "spring", stiffness: 500, damping: 35 }}
-                  />
-                )}
-              </div>
-            )
-          })}
+      {/* The Carousel Viewport Arena */}
+      <div
+        id="carousel-viewport"
+        className="relative grid h-32 w-full max-w-5xl grid-cols-3 items-center justify-center overflow-hidden px-4"
+      >
+        {/* LEFT SLOT: Previous Word */}
+        <div className="pointer-events-none flex w-full justify-end overflow-hidden pr-16 text-2xl font-bold text-zinc-800 opacity-30 select-none">
+          <AnimatePresence mode="popLayout">
+            <motion.span
+              key={`prev-${currentIndex}`}
+              initial={{ x: "100%", opacity: 0 }}
+              animate={{ x: 0, opacity: 0.3 }}
+              exit={{ x: "-100%", opacity: 0 }}
+              transition={{ type: "spring", stiffness: 400, damping: 32 }}
+              className="block whitespace-nowrap lowercase"
+            >
+              {prevWord}
+            </motion.span>
+          </AnimatePresence>
         </div>
 
-        {/* Ghost Word Queue System Preview Panel */}
-        <div className="pointer-events-none text-3xl font-bold text-zinc-800 lowercase opacity-40 select-none">
-          {nextWord}
+        {/* CENTER SLOT: Active Typing Target */}
+        <div className="relative flex h-full w-full items-center justify-center text-6xl font-black tracking-tight">
+          <AnimatePresence mode="popLayout">
+            <motion.div
+              key={`current-${currentIndex}`}
+              initial={{ x: "100%", opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: "-100%", opacity: 0 }}
+              transition={{ type: "spring", stiffness: 400, damping: 32 }}
+              className="absolute flex items-center justify-center"
+            >
+              {currentWord.split("").map((char, index) => {
+                let colorClass = "text-zinc-700"
+                let shouldPop = false
+
+                if (index < correctCharCount) {
+                  colorClass = "text-zinc-50"
+                  shouldPop = true
+                }
+
+                return (
+                  <div
+                    key={`${currentIndex}-char-${index}`}
+                    className="char-container w-[42px]"
+                  >
+                    {shouldPop ? (
+                      <motion.span
+                        initial={{ scale: 1 }}
+                        animate={{ scale: [1, 1.25, 1] }}
+                        transition={{
+                          duration: 0.12,
+                          ease: [0.175, 0.885, 0.32, 1.275],
+                        }}
+                        className={`inline-block ${colorClass}`}
+                      >
+                        {char}
+                      </motion.span>
+                    ) : (
+                      <span className={colorClass}>{char}</span>
+                    )}
+
+                    {index === correctCharCount && (
+                      <motion.div
+                        layoutId="typing-cursor"
+                        className="absolute right-0 bottom-[-10px] left-0 h-[3px] bg-zinc-200"
+                        transition={{
+                          type: "spring",
+                          stiffness: 500,
+                          damping: 35,
+                        }}
+                      />
+                    )}
+                  </div>
+                )
+              })}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        {/* RIGHT SLOT: Next Word */}
+        <div className="pointer-events-none flex w-full justify-start overflow-hidden pl-16 text-2xl font-bold text-zinc-600 opacity-40 select-none">
+          <AnimatePresence mode="popLayout">
+            <motion.span
+              key={`next-${currentIndex}`}
+              initial={{ x: "100%", opacity: 0 }}
+              animate={{ x: 0, opacity: 0.4 }}
+              exit={{ x: "-100%", opacity: 0 }}
+              transition={{ type: "spring", stiffness: 400, damping: 32 }}
+              className="block whitespace-nowrap lowercase"
+            >
+              {nextWord}
+            </motion.span>
+          </AnimatePresence>
         </div>
       </div>
 
-      {/* Completely Invisible Core Input Event Capturer */}
+      {/* Core Hidden Event Capturer */}
       <input
         ref={inputRef}
         type="text"
