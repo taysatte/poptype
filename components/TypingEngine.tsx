@@ -20,14 +20,22 @@ export default function TypingEngine() {
   const [wordQueue, setWordQueue] = useState<string[]>(SAMPLE_WORDS)
   const [currentIndex, setCurrentIndex] = useState(0)
   const [typedValue, setTypedValue] = useState("")
-  const [correctCharCount, setCorrectCharCount] = useState(0)
+  const [isError, setIsError] = useState(false)
 
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Calculate our 3-word window dynamically safely around array bounds
   const prevWord = currentIndex > 0 ? wordQueue[currentIndex - 1] : ""
   const currentWord = wordQueue[currentIndex] || ""
   const nextWord = wordQueue[(currentIndex + 1) % wordQueue.length] || ""
+
+  // Track exactly how many correct characters are typed so far
+  let correctCharCount = 0
+  while (
+    correctCharCount < typedValue.length &&
+    typedValue[correctCharCount] === currentWord[correctCharCount]
+  ) {
+    correctCharCount++
+  }
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -36,23 +44,34 @@ export default function TypingEngine() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.toLowerCase()
 
+    // Prevent typing past the length of the current word
+    if (value.length > currentWord.length) return
+
     // Zero-Space Completion Match
     if (value === currentWord) {
       setTypedValue("")
-      setCorrectCharCount(0)
+      setIsError(false)
       setCurrentIndex((prev) => (prev + 1) % wordQueue.length)
       return
     }
 
-    if (currentWord.startsWith(value)) {
-      setTypedValue(value)
-      setCorrectCharCount(value.length)
-    } else {
+    setTypedValue(value)
+
+    // Check if the latest character typed is a mistake
+    const latestIndex = value.length - 1
+    if (latestIndex >= 0 && value[latestIndex] !== currentWord[latestIndex]) {
+      setIsError(true)
+
+      // Trigger the canvas wrapper shake
       const shakeElement = document.getElementById("carousel-viewport")
       if (shakeElement) {
+        shakeElement.classList.remove("animate-shake")
+        // Force a DOM reflow to restart the animation smoothly
+        void shakeElement.offsetWidth
         shakeElement.classList.add("animate-shake")
-        setTimeout(() => shakeElement.classList.remove("animate-shake"), 150)
       }
+    } else {
+      setIsError(false)
     }
   }
 
@@ -94,12 +113,19 @@ export default function TypingEngine() {
               className="absolute flex items-center justify-center"
             >
               {currentWord.split("").map((char, index) => {
-                let colorClass = "text-zinc-700"
+                let colorClass = "text-zinc-700" // Upcoming character default
                 let shouldPop = false
 
-                if (index < correctCharCount) {
-                  colorClass = "text-zinc-50"
-                  shouldPop = true
+                if (index < typedValue.length) {
+                  if (typedValue[index] === currentWord[index]) {
+                    colorClass = "text-zinc-50" // Correctly typed
+                    // Only pop if it was just typed correctly
+                    if (index === typedValue.length - 1 && !isError) {
+                      shouldPop = true
+                    }
+                  } else {
+                    colorClass = "text-red-500 bg-red-500/10 rounded-sm" // Highlight the error index
+                  }
                 }
 
                 return (
@@ -120,13 +146,18 @@ export default function TypingEngine() {
                         {char}
                       </motion.span>
                     ) : (
-                      <span className={colorClass}>{char}</span>
+                      <span
+                        className={`${colorClass} inline-block transition-colors duration-100`}
+                      >
+                        {char}
+                      </span>
                     )}
 
-                    {index === correctCharCount && (
+                    {/* Position cursor at the end of what has been typed */}
+                    {index === typedValue.length && (
                       <motion.div
                         layoutId="typing-cursor"
-                        className="absolute right-0 bottom-[-10px] left-0 h-[3px] bg-zinc-200"
+                        className={`absolute right-0 bottom-[-10px] left-0 h-[3px] ${isError ? "bg-red-500" : "bg-zinc-200"}`}
                         transition={{
                           type: "spring",
                           stiffness: 500,
