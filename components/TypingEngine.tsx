@@ -15,6 +15,7 @@ const SAMPLE_WORDS = [
   "minimal",
   "vector",
 ]
+const SESSION_DURATION = 15 // 15-second blitz mode
 
 export default function TypingEngine() {
   const [wordQueue, setWordQueue] = useState<string[]>(SAMPLE_WORDS)
@@ -22,33 +23,72 @@ export default function TypingEngine() {
   const [typedValue, setTypedValue] = useState("")
   const [isError, setIsError] = useState(false)
 
+  // Session & Timer States
+  const [timeLeft, setTimeLeft] = useState(SESSION_DURATION)
+  const [isSessionActive, setIsSessionActive] = useState(false)
+  const [isSessionFinished, setIsSessionFinished] = useState(false)
+
+  // Stat Metrics Tracking
+  const [totalKeysPressed, setTotalKeysPressed] = useState(0)
+  const [correctKeysPressed, setCorrectKeysPressed] = useState(0)
+  const [wordsCleared, setWordsCleared] = useState(0)
+
   const inputRef = useRef<HTMLInputElement>(null)
+  const timerRef = useRef<NodeJS.Timeout | null>(null)
 
   const prevWord = currentIndex > 0 ? wordQueue[currentIndex - 1] : ""
   const currentWord = wordQueue[currentIndex] || ""
   const nextWord = wordQueue[(currentIndex + 1) % wordQueue.length] || ""
 
-  // Track exactly how many correct characters are typed so far
-  let correctCharCount = 0
-  while (
-    correctCharCount < typedValue.length &&
-    typedValue[correctCharCount] === currentWord[correctCharCount]
-  ) {
-    correctCharCount++
-  }
-
   useEffect(() => {
-    inputRef.current?.focus()
-  }, [currentIndex])
+    if (!isSessionFinished) {
+      inputRef.current?.focus()
+    }
+  }, [currentIndex, isSessionFinished])
+
+  // Countdown Timer Interval Logic
+  useEffect(() => {
+    if (isSessionActive && timeLeft > 0) {
+      timerRef.current = setInterval(() => {
+        setTimeLeft((prev) => prev - 1)
+      }, 1000)
+    } else if (timeLeft === 0) {
+      // Session End Trigger
+      setIsSessionActive(false)
+      setIsSessionFinished(true)
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current)
+    }
+  }, [isSessionActive, timeLeft])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.toLowerCase()
+    if (isSessionFinished) return
 
-    // Prevent typing past the length of the current word
+    const value = e.target.value.toLowerCase()
     if (value.length > currentWord.length) return
+
+    // Start session on very first keystroke
+    if (
+      !isSessionActive &&
+      !isSessionFinished &&
+      value.length === 1 &&
+      typedValue.length === 0
+    ) {
+      setIsSessionActive(true)
+    }
+
+    // Track total keystrokes for absolute accuracy calculations
+    if (value.length > typedValue.length) {
+      setTotalKeysPressed((prev) => prev + 1)
+    }
 
     // Zero-Space Completion Match
     if (value === currentWord) {
+      setCorrectKeysPressed((prev) => prev + 1) // For the implicit final character match
+      setWordsCleared((prev) => prev + 1)
       setTypedValue("")
       setIsError(false)
       setCurrentIndex((prev) => (prev + 1) % wordQueue.length)
@@ -57,158 +97,277 @@ export default function TypingEngine() {
 
     setTypedValue(value)
 
-    // Check if the latest character typed is a mistake
+    // Check mistake states
     const latestIndex = value.length - 1
     if (latestIndex >= 0 && value[latestIndex] !== currentWord[latestIndex]) {
       setIsError(true)
 
-      // Trigger the canvas wrapper shake
       const shakeElement = document.getElementById("carousel-viewport")
       if (shakeElement) {
         shakeElement.classList.remove("animate-shake")
-        // Force a DOM reflow to restart the animation smoothly
         void shakeElement.offsetWidth
         shakeElement.classList.add("animate-shake")
       }
     } else {
       setIsError(false)
+      if (value.length > typedValue.length) {
+        setCorrectKeysPressed((prev) => prev + 1)
+      }
     }
   }
 
+  // Quick Session Reset Engine
+  const resetSession = () => {
+    if (timerRef.current) clearInterval(timerRef.current)
+    setCurrentIndex(0)
+    setTypedValue("")
+    setIsError(false)
+    setTimeLeft(SESSION_DURATION)
+    setIsSessionActive(false)
+    setIsSessionFinished(false)
+    setTotalKeysPressed(0)
+    setCorrectKeysPressed(0)
+    setWordsCleared(0)
+    // Shuffle or reload words here later
+  }
+
+  // Keyboard shortcut listener for instantaneous restart (Esc key)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        resetSession()
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [])
+
+  // Calculate final score strings safely
+  const timeElapsed = SESSION_DURATION - timeLeft
+  const currentWpm =
+    timeElapsed > 0 ? Math.round((wordsCleared / timeElapsed) * 60) : 0
+  const currentAccuracy =
+    totalKeysPressed > 0
+      ? Math.round((correctKeysPressed / totalKeysPressed) * 100)
+      : 100
+
   return (
     <div
-      className="flex min-h-[500px] w-full flex-col items-center justify-center font-mono select-none"
-      onClick={() => inputRef.current?.focus()}
+      className="relative flex min-h-[500px] w-full flex-col items-center justify-center font-mono select-none"
+      onClick={() => !isSessionFinished && inputRef.current?.focus()}
     >
-      {/* The Carousel Viewport Arena */}
-      <div
-        id="carousel-viewport"
-        className="relative grid h-32 w-full max-w-5xl grid-cols-3 items-center justify-center overflow-hidden px-4"
-      >
-        {/* LEFT SLOT: Previous Word */}
-        <div className="pointer-events-none flex w-full justify-end overflow-hidden pr-16 text-2xl font-bold text-zinc-700 line-through opacity-50 select-none">
-          <AnimatePresence mode="popLayout">
-            <motion.span
-              key={`prev-${currentIndex}`}
-              initial={{ x: "100%", opacity: 0 }}
-              animate={{ x: 0, opacity: 0.3 }}
-              exit={{ x: "-100%", opacity: 0 }}
-              transition={{ type: "spring", stiffness: 400, damping: 32 }}
-              className="block whitespace-nowrap lowercase"
-            >
-              {prevWord}
-            </motion.span>
-          </AnimatePresence>
+      {/* Live Sleek Timer / Status Header Banner */}
+      <div className="mb-12 flex h-6 items-center gap-12 text-sm tracking-wider text-zinc-500">
+        <div>
+          time:{" "}
+          <span
+            className={`font-bold transition-colors ${isSessionActive ? "text-zinc-200" : "text-zinc-500"}`}
+          >
+            {timeLeft}s
+          </span>
         </div>
-        {/* CENTER SLOT: Active Typing Target */}
-        <div className="relative flex h-full w-full items-center justify-center text-6xl font-black tracking-tight">
-          <AnimatePresence mode="popLayout">
-            <motion.div
-              key={`current-${currentIndex}`}
-              initial={{ x: "100%", opacity: 0, scale: 0.95 }}
-              animate={{ x: 0, opacity: 1, scale: 1 }}
-              // The "Pop Off" Exit Variant: Snaps out down to 70% scale while flying left
-              exit={{
-                x: "-120%",
-                opacity: 0,
-                scale: 0.7,
-                filter: "blur(4px)", // Optional: adding a micro motion blur gives it a "high velocity" feel
-              }}
-              transition={{
-                type: "spring",
-                stiffness: 450, // Slightly higher stiffness on the exit to clear it out aggressively
-                damping: 28, // Lower damping allows it to snap out without dragging
-              }}
-              className="absolute flex items-center justify-center"
-            >
-              {currentWord.split("").map((char, index) => {
-                let colorClass = "text-zinc-700"
-                let shouldPop = false
+        {isSessionActive && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex gap-6"
+          >
+            <div>
+              wpm: <span className="font-bold text-zinc-300">{currentWpm}</span>
+            </div>
+            <div>
+              acc:{" "}
+              <span className="font-bold text-zinc-300">
+                {currentAccuracy}%
+              </span>
+            </div>
+          </motion.div>
+        )}
+      </div>
 
-                if (index < typedValue.length) {
-                  if (typedValue[index] === currentWord[index]) {
-                    colorClass = "text-zinc-50"
-                    if (index === typedValue.length - 1 && !isError) {
-                      shouldPop = true
+      <AnimatePresence mode="wait">
+        {!isSessionFinished ? (
+          /* GAME ON: Render active sliding text engine carousel viewport */
+          <motion.div
+            key="game-active"
+            exit={{ opacity: 0, y: -20 }}
+            className="relative grid h-32 w-full max-w-5xl grid-cols-3 items-center justify-center overflow-hidden px-4"
+            id="carousel-viewport"
+          >
+            {/* LEFT SLOT: Previous Word */}
+            <div className="flex w-full justify-end overflow-hidden pr-16 text-2xl font-bold text-zinc-800 opacity-30">
+              <AnimatePresence mode="popLayout">
+                <motion.span
+                  key={`prev-${currentIndex}`}
+                  initial={{ x: "100%", opacity: 0 }}
+                  animate={{ x: 0, opacity: 0.3 }}
+                  exit={{ x: "-100%", opacity: 0 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                  className="block whitespace-nowrap lowercase"
+                >
+                  {prevWord}
+                </motion.span>
+              </AnimatePresence>
+            </div>
+
+            {/* CENTER SLOT: Active Typing Target */}
+            <div className="relative flex h-full w-full items-center justify-center text-6xl font-black tracking-tight">
+              <AnimatePresence mode="popLayout">
+                <motion.div
+                  key={`current-${currentIndex}`}
+                  initial={{ x: "100%", opacity: 0, scale: 0.95 }}
+                  animate={{ x: 0, opacity: 1, scale: 1 }}
+                  exit={{
+                    x: "-120%",
+                    opacity: 0,
+                    scale: 0.7,
+                    filter: "blur(4px)",
+                  }}
+                  transition={{ type: "spring", stiffness: 450, damping: 28 }}
+                  className="absolute flex items-center justify-center"
+                >
+                  {currentWord.split("").map((char, index) => {
+                    let colorClass = "text-zinc-700"
+                    let shouldPop = false
+
+                    if (index < typedValue.length) {
+                      if (typedValue[index] === currentWord[index]) {
+                        colorClass = "text-zinc-50"
+                        if (index === typedValue.length - 1 && !isError) {
+                          shouldPop = true
+                        }
+                      } else {
+                        colorClass = "text-red-500 bg-red-500/10 rounded-sm"
+                      }
                     }
-                  } else {
-                    colorClass = "text-red-500 bg-red-500/10 rounded-sm"
-                  }
-                }
 
-                return (
-                  <div
-                    key={`${currentIndex}-char-${index}`}
-                    className="char-container w-[42px]"
-                  >
-                    {shouldPop ? (
-                      <motion.span
-                        initial={{ scale: 1 }}
-                        animate={{ scale: [1, 1.25, 1] }}
-                        transition={{
-                          duration: 0.12,
-                          ease: [0.175, 0.885, 0.32, 1.275],
-                        }}
-                        className={`inline-block ${colorClass}`}
+                    return (
+                      <div
+                        key={`${currentIndex}-char-${index}`}
+                        className="char-container w-[42px]"
                       >
-                        {char}
-                      </motion.span>
-                    ) : (
-                      <span
-                        className={`${colorClass} inline-block transition-colors duration-100`}
-                      >
-                        {char}
-                      </span>
-                    )}
+                        {shouldPop ? (
+                          <motion.span
+                            initial={{ scale: 1 }}
+                            animate={{ scale: [1, 1.25, 1] }}
+                            transition={{
+                              duration: 0.12,
+                              ease: [0.175, 0.885, 0.32, 1.275],
+                            }}
+                            className={`inline-block ${colorClass}`}
+                          >
+                            {char}
+                          </motion.span>
+                        ) : (
+                          <span
+                            className={`${colorClass} inline-block transition-colors duration-100`}
+                          >
+                            {char}
+                          </span>
+                        )}
 
-                    {index === typedValue.length && (
-                      <motion.div
-                        layoutId="typing-cursor"
-                        className={`absolute right-0 bottom-[-10px] left-0 h-[3px] ${isError ? "bg-red-500" : "bg-zinc-200"}`}
-                        transition={{
-                          type: "spring",
-                          stiffness: 500,
-                          damping: 35,
-                        }}
-                      />
-                    )}
-                  </div>
-                )
-              })}
-            </motion.div>
-          </AnimatePresence>
-        </div>{" "}
-        {/* RIGHT SLOT: Next Word */}
-        <div className="pointer-events-none flex w-full justify-start overflow-hidden pl-16 text-2xl font-bold text-zinc-600 opacity-60 select-none">
-          <AnimatePresence mode="popLayout">
-            <motion.span
-              key={`next-${currentIndex}`}
-              initial={{ x: "100%", opacity: 0 }}
-              animate={{ x: 0, opacity: 0.4 }}
-              exit={{ x: "-100%", opacity: 0 }}
-              transition={{ type: "spring", stiffness: 400, damping: 32 }}
-              className="block whitespace-nowrap lowercase"
+                        {index === typedValue.length && (
+                          <motion.div
+                            layoutId="typing-cursor"
+                            className={`absolute right-0 bottom-[-10px] left-0 h-[3px] ${isError ? "bg-red-500" : "bg-zinc-200"}`}
+                            transition={{
+                              type: "spring",
+                              stiffness: 500,
+                              damping: 35,
+                            }}
+                          />
+                        )}
+                      </div>
+                    )
+                  })}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+
+            {/* RIGHT SLOT: Next Word */}
+            <div className="flex w-full justify-start overflow-hidden pl-16 text-2xl font-bold text-zinc-600 opacity-40">
+              <AnimatePresence mode="popLayout">
+                <motion.span
+                  key={`next-${currentIndex}`}
+                  initial={{ x: "100%", opacity: 0 }}
+                  animate={{ x: 0, opacity: 0.4 }}
+                  exit={{ x: "-100%", opacity: 0 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 32 }}
+                  className="block whitespace-nowrap lowercase"
+                >
+                  {nextWord}
+                </motion.span>
+              </AnimatePresence>
+            </div>
+          </motion.div>
+        ) : (
+          /* SESSION SUMMARY VIEW: Sleek Post-Game Data Screen */
+          <motion.div
+            key="game-score"
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 350, damping: 25 }}
+            className="flex h-32 flex-col items-center justify-center p-6 text-center"
+          >
+            <div className="flex gap-16">
+              <div className="flex flex-col items-start">
+                <span className="text-xs tracking-wider text-zinc-500 uppercase">
+                  wpm
+                </span>
+                <span className="text-6xl font-black text-zinc-50">
+                  {currentWpm}
+                </span>
+              </div>
+              <div className="flex flex-col items-start">
+                <span className="text-xs tracking-wider text-zinc-500 uppercase">
+                  accuracy
+                </span>
+                <span className="text-6xl font-black text-zinc-50">
+                  {currentAccuracy}%
+                </span>
+              </div>
+              <div className="flex flex-col items-start">
+                <span className="text-xs tracking-wider text-zinc-500 uppercase">
+                  cleared
+                </span>
+                <span className="text-6xl font-black text-zinc-50">
+                  {wordsCleared}
+                </span>
+              </div>
+            </div>
+
+            <button
+              onClick={resetSession}
+              className="mt-8 rounded-md border border-zinc-800 bg-zinc-900 px-4 py-2 text-xs tracking-widest text-zinc-500 uppercase transition-all hover:border-zinc-700 hover:text-zinc-300"
             >
-              {nextWord}
-            </motion.span>
-          </AnimatePresence>
+              [ press escape or click to retry ]
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Completely Invisible Core Input Event Capturer */}
+      {!isSessionFinished && (
+        <input
+          ref={inputRef}
+          type="text"
+          value={typedValue}
+          onChange={handleInputChange}
+          className="pointer-events-none absolute h-0 w-0 cursor-default opacity-0"
+          autoCapitalize="off"
+          autoComplete="off"
+          autoCorrect="off"
+          spellCheck="false"
+        />
+      )}
+
+      {!isSessionFinished && (
+        <div className="mt-16 text-xs tracking-widest text-zinc-600 uppercase">
+          {isSessionActive
+            ? "[ clock ticking — push pace ]"
+            : "[ click anywhere or start typing to fire ]"}
         </div>
-      </div>
-      {/* Core Hidden Event Capturer */}
-      <input
-        ref={inputRef}
-        type="text"
-        value={typedValue}
-        onChange={handleInputChange}
-        className="pointer-events-none absolute h-0 w-0 cursor-default opacity-0"
-        autoCapitalize="off"
-        autoComplete="off"
-        autoCorrect="off"
-        spellCheck="false"
-      />
-      <div className="mt-16 animate-pulse text-xs tracking-widest text-zinc-600 uppercase">
-        [ system active: start typing to fire ]
-      </div>
+      )}
     </div>
   )
 }
