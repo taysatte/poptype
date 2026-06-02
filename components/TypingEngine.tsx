@@ -2,6 +2,9 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
+import { Button } from "@/components/ui/button"
+import { Separator } from "@/components/ui/separator"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { generateQueue, type Difficulty } from "@/lib/wordBank"
 
 const SESSION_OPTIONS = [15, 30] as const
@@ -41,16 +44,16 @@ export default function TypingEngine() {
     }
   }, [isSessionFinished])
 
-  // Rebuild queue and timer when idle config changes
+  // Rebuild queue and timer when idle config changes (not after a completed run)
   useEffect(() => {
-    if (isSessionActive) return
+    if (isSessionActive || isSessionFinished) return
 
     setWordQueue(generateQueue(difficulty, queueSizeFor(sessionDuration)))
     setCurrentIndex(0)
     setTypedValue("")
     setIsError(false)
     setTimeLeft(sessionDuration)
-  }, [difficulty, sessionDuration, isSessionActive])
+  }, [difficulty, sessionDuration, isSessionActive, isSessionFinished])
 
   const prevWord = currentIndex > 0 ? wordQueue[currentIndex - 1] : ""
   const currentWord = wordQueue[currentIndex] || ""
@@ -65,10 +68,11 @@ export default function TypingEngine() {
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => prev - 1)
       }, 1000)
-    } else if (timeLeft === 0) {
+    } else if (timeLeft === 0 && isSessionActive) {
       setIsSessionActive(false)
       setIsSessionFinished(true)
       if (timerRef.current) clearInterval(timerRef.current)
+      requestAnimationFrame(() => inputRef.current?.focus())
     }
 
     return () => {
@@ -149,7 +153,9 @@ export default function TypingEngine() {
     return () => window.removeEventListener("keydown", handleKeyDown)
   }, [resetSession])
 
-  const timeElapsed = sessionDuration - timeLeft
+  const timeElapsed = isSessionFinished
+    ? sessionDuration
+    : sessionDuration - timeLeft
   const currentWpm =
     timeElapsed > 0 ? Math.round((wordsCleared / timeElapsed) * 60) : 0
   const currentAccuracy =
@@ -165,47 +171,48 @@ export default function TypingEngine() {
     >
       {/* Config Sub-Bar (Hidden during active typing runs for extreme focus) */}
       {!isSessionActive && !isSessionFinished && (
-        <div className="absolute top-[-40px] flex items-center gap-4 rounded-lg border border-zinc-800/60 bg-zinc-900/40 px-3 py-1.5 text-xs">
-          <div className="flex gap-4">
+        <div className="absolute top-[-40px] flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-2 py-1 text-xs">
+          <ToggleGroup
+            type="single"
+            size="sm"
+            value={difficulty}
+            onValueChange={(v) => v && setDifficulty(v as Difficulty)}
+            className="font-bold tracking-wider lowercase"
+          >
             {DIFFICULTY_TIERS.map((tier) => (
-              <button
-                key={tier}
-                onClick={() => setDifficulty(tier)}
-                className={`rounded px-2 py-0.5 font-bold tracking-wider lowercase transition-all ${
-                  difficulty === tier
-                    ? "scale-105 bg-zinc-100 font-black text-zinc-950"
-                    : "text-zinc-500 hover:text-zinc-300"
-                }`}
-              >
+              <ToggleGroupItem key={tier} value={tier} aria-label={tier}>
                 {tier}
-              </button>
+              </ToggleGroupItem>
             ))}
-          </div>
-          <span className="text-zinc-700">|</span>
-          <div className="flex gap-2">
+          </ToggleGroup>
+          <Separator orientation="vertical" className="mx-1 h-5" />
+          <ToggleGroup
+            type="single"
+            size="sm"
+            value={String(sessionDuration)}
+            onValueChange={(v) =>
+              v && setSessionDuration(Number(v) as SessionDuration)
+            }
+          >
             {SESSION_OPTIONS.map((sec) => (
-              <button
+              <ToggleGroupItem
                 key={sec}
-                onClick={() => setSessionDuration(sec)}
-                className={`rounded px-2 py-0.5 font-bold tracking-wider transition-all ${
-                  sessionDuration === sec
-                    ? "scale-105 bg-zinc-100 font-black text-zinc-950"
-                    : "text-zinc-500 hover:text-zinc-300"
-                }`}
+                value={String(sec)}
+                aria-label={`${sec} seconds`}
               >
                 {sec}s
-              </button>
+              </ToggleGroupItem>
             ))}
-          </div>
+          </ToggleGroup>
         </div>
       )}
 
       {/* Live Sleek Timer / Status Header Banner */}
-      <div className="mb-12 flex h-6 items-center gap-12 text-sm tracking-wider text-zinc-500">
+      <div className="mb-12 flex h-6 items-center gap-12 text-sm tracking-wider text-muted-foreground">
         <div>
           time:{" "}
           <span
-            className={`font-bold transition-colors ${isSessionActive ? "text-zinc-200" : "text-zinc-500"}`}
+            className={`font-bold transition-colors ${isSessionActive ? "text-foreground" : "text-muted-foreground"}`}
           >
             {timeLeft}s
           </span>
@@ -217,11 +224,11 @@ export default function TypingEngine() {
             className="flex gap-6"
           >
             <div>
-              wpm: <span className="font-bold text-zinc-300">{currentWpm}</span>
+              wpm: <span className="font-bold text-foreground">{currentWpm}</span>
             </div>
             <div>
               acc:{" "}
-              <span className="font-bold text-zinc-300">
+              <span className="font-bold text-foreground">
                 {currentAccuracy}%
               </span>
             </div>
@@ -241,7 +248,7 @@ export default function TypingEngine() {
             {/* The Sliding Horizon Container */}
             <div className="relative grid h-full w-full grid-cols-3 items-center justify-center">
               {/* LEFT SLOT: Previous Word */}
-              <div className="pointer-events-none flex justify-end overflow-hidden pr-16 text-2xl font-bold whitespace-nowrap text-primary-foreground/50 line-through select-none">
+              <div className="pointer-events-none flex justify-end overflow-hidden pr-16 text-2xl font-bold whitespace-nowrap text-muted-foreground line-through select-none">
                 <AnimatePresence mode="popLayout">
                   <motion.span
                     key={`prev-${currentIndex}`}
@@ -273,17 +280,18 @@ export default function TypingEngine() {
                     className="absolute flex items-center justify-center"
                   >
                     {currentWord.split("").map((char, index) => {
-                      let colorClass = "text-zinc-700"
+                      let colorClass = "text-muted-foreground"
                       let shouldPop = false
 
                       if (index < typedValue.length) {
                         if (typedValue[index] === currentWord[index]) {
-                          colorClass = "text-zinc-50"
+                          colorClass = "text-foreground"
                           if (index === typedValue.length - 1 && !isError) {
                             shouldPop = true
                           }
                         } else {
-                          colorClass = "text-red-500 bg-red-500/10 rounded-sm"
+                          colorClass =
+                            "text-destructive bg-destructive/10 rounded-sm"
                         }
                       }
 
@@ -315,7 +323,7 @@ export default function TypingEngine() {
                           {index === typedValue.length && (
                             <motion.div
                               layoutId="typing-cursor"
-                              className={`absolute right-0 bottom-[-10px] left-0 h-[3px] ${isError ? "bg-red-500" : "bg-zinc-200"}`}
+                              className={`absolute right-0 bottom-[-10px] left-0 h-[3px] ${isError ? "bg-destructive" : "bg-foreground"}`}
                               transition={{
                                 type: "spring",
                                 stiffness: 500,
@@ -331,7 +339,7 @@ export default function TypingEngine() {
               </div>
 
               {/* RIGHT SLOT: Next Word */}
-              <div className="pointer-events-none flex justify-start overflow-hidden pl-16 text-2xl font-bold whitespace-nowrap text-zinc-600 opacity-40 select-none">
+              <div className="pointer-events-none flex justify-start overflow-hidden pl-16 text-2xl font-bold whitespace-nowrap text-muted-foreground opacity-40 select-none">
                 <AnimatePresence mode="popLayout">
                   <motion.span
                     key={`next-${currentIndex}`}
@@ -358,57 +366,60 @@ export default function TypingEngine() {
           >
             <div className="flex gap-16">
               <div className="flex flex-col items-start">
-                <span className="text-xs tracking-wider text-zinc-500 uppercase">
+                <span className="text-xs tracking-wider text-muted-foreground uppercase">
                   wpm
                 </span>
-                <span className="text-6xl font-black text-zinc-50">
+                <span className="text-6xl font-black text-foreground">
                   {currentWpm}
                 </span>
               </div>
               <div className="flex flex-col items-start">
-                <span className="text-xs tracking-wider text-zinc-500 uppercase">
+                <span className="text-xs tracking-wider text-muted-foreground uppercase">
                   accuracy
                 </span>
-                <span className="text-6xl font-black text-zinc-50">
+                <span className="text-6xl font-black text-foreground">
                   {currentAccuracy}%
                 </span>
               </div>
               <div className="flex flex-col items-start">
-                <span className="text-xs tracking-wider text-zinc-500 uppercase">
+                <span className="text-xs tracking-wider text-muted-foreground uppercase">
                   cleared
                 </span>
-                <span className="text-6xl font-black text-zinc-50">
+                <span className="text-6xl font-black text-foreground">
                   {wordsCleared}
                 </span>
               </div>
             </div>
 
-            <button
+            <Button
+              variant="outline"
+              size="sm"
               onClick={resetSession}
-              className="mt-8 rounded-md border border-zinc-800 bg-zinc-900 px-4 py-2 text-xs tracking-widest text-zinc-500 uppercase transition-all hover:border-zinc-700 hover:text-zinc-300"
+              className="mt-8 tracking-widest uppercase"
             >
               [ press escape or click to retry ]
-            </button>
+            </Button>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {!isSessionFinished && (
-        <input
-          ref={inputRef}
-          type="text"
-          value={typedValue}
-          onChange={handleInputChange}
-          className="pointer-events-none absolute h-0 w-0 cursor-default opacity-0"
-          autoCapitalize="off"
-          autoComplete="off"
-          autoCorrect="off"
-          spellCheck="false"
-        />
-      )}
+      <input
+        ref={inputRef}
+        type="text"
+        value={typedValue}
+        onChange={handleInputChange}
+        readOnly={isSessionFinished}
+        aria-hidden={isSessionFinished}
+        tabIndex={isSessionFinished ? -1 : 0}
+        className="pointer-events-none absolute h-0 w-0 cursor-default opacity-0"
+        autoCapitalize="off"
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck="false"
+      />
 
       {!isSessionFinished && (
-        <div className="mt-16 text-xs tracking-widest text-zinc-600 uppercase">
+        <div className="mt-16 text-xs tracking-widest text-muted-foreground uppercase">
           {isSessionActive
             ? "[ clock ticking — push pace ]"
             : "[ select difficulty & duration, then start typing ]"}
