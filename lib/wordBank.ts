@@ -1,3 +1,6 @@
+import { getNormalizedFrequencyWords } from "@/lib/frequencyWords"
+import { partitionFrequencyWords } from "@/lib/wordTiers"
+
 export interface WordBank {
   easy: string[]
   medium: string[]
@@ -6,7 +9,7 @@ export interface WordBank {
 
 export type Difficulty = keyof WordBank
 
-export const wordBank: WordBank = {
+const CUSTOM_WORDS: WordBank = {
   easy: [
     "cat",
     "dog",
@@ -86,6 +89,28 @@ export const wordBank: WordBank = {
     "deployment",
     "optimization",
   ],
+}
+
+function mergeTier(tier: Difficulty, frequency: string[]): string[] {
+  const seen = new Set<string>()
+  const merged: string[] = []
+
+  for (const word of [...frequency, ...CUSTOM_WORDS[tier]]) {
+    const key = word.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    merged.push(key)
+  }
+
+  return merged
+}
+
+const frequencyByTier = partitionFrequencyWords(getNormalizedFrequencyWords())
+
+export const wordBank: WordBank = {
+  easy: mergeTier("easy", frequencyByTier.easy),
+  medium: mergeTier("medium", frequencyByTier.medium),
+  hard: mergeTier("hard", frequencyByTier.hard),
 }
 
 /**
