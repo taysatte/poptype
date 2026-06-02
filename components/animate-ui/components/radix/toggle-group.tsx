@@ -39,7 +39,7 @@ function ToggleGroup({
     >
       <ToggleGroupProvider value={{ variant, size }}>
         {props.type === 'single' ? (
-          <ToggleGroupHighlightPrimitive className="bg-accent rounded-md">
+          <ToggleGroupHighlightPrimitive className="rounded-md bg-accent">
             {children}
           </ToggleGroupHighlightPrimitive>
         ) : (
@@ -66,7 +66,7 @@ function ToggleGroupItem({
   return (
     <ToggleGroupHighlightItemPrimitive
       value={props.value}
-      className={cn(type === 'multiple' && 'bg-accent rounded-md')}
+      className={cn(type === 'multiple' && 'rounded-md bg-accent')}
     >
       <ToggleGroupItemPrimitive
         data-variant={contextVariant || variant}

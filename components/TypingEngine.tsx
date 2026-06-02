@@ -3,14 +3,17 @@
 import React, { useState, useEffect, useRef, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
-import { Separator } from "@/components/ui/separator"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { generateQueue, type Difficulty } from "@/lib/wordBank"
 
 const SESSION_OPTIONS = [15, 30] as const
 type SessionDuration = (typeof SESSION_OPTIONS)[number]
 
-const DIFFICULTY_TIERS = ["easy", "medium", "hard"] as const satisfies readonly Difficulty[]
+const DIFFICULTY_TIERS = [
+  "easy",
+  "medium",
+  "hard",
+] as const satisfies readonly Difficulty[]
 
 function queueSizeFor(duration: SessionDuration): number {
   return duration === 30 ? 60 : 40
@@ -171,21 +174,26 @@ export default function TypingEngine() {
     >
       {/* Config Sub-Bar (Hidden during active typing runs for extreme focus) */}
       {!isSessionActive && !isSessionFinished && (
-        <div className="absolute top-[-40px] flex items-center gap-2 rounded-lg border border-border bg-muted/50 px-2 py-1 text-xs">
+        <div className="poptype-config absolute top-[-40px] flex items-center gap-0.5 rounded-lg bg-muted p-1">
           <ToggleGroup
             type="single"
             size="sm"
             value={difficulty}
             onValueChange={(v) => v && setDifficulty(v as Difficulty)}
-            className="font-bold tracking-wider lowercase"
+            className="gap-0 border-0 p-0 shadow-none"
           >
             {DIFFICULTY_TIERS.map((tier) => (
-              <ToggleGroupItem key={tier} value={tier} aria-label={tier}>
+              <ToggleGroupItem
+                key={tier}
+                value={tier}
+                aria-label={tier}
+                className="h-7 min-w-13 px-2.5 text-xs font-medium tracking-wide lowercase"
+              >
                 {tier}
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
-          <Separator orientation="vertical" className="mx-1 h-5" />
+          <div className="mx-0.5 h-4 w-px shrink-0 bg-border/70" aria-hidden />
           <ToggleGroup
             type="single"
             size="sm"
@@ -193,12 +201,14 @@ export default function TypingEngine() {
             onValueChange={(v) =>
               v && setSessionDuration(Number(v) as SessionDuration)
             }
+            className="gap-0 border-0 p-0 shadow-none"
           >
             {SESSION_OPTIONS.map((sec) => (
               <ToggleGroupItem
                 key={sec}
                 value={String(sec)}
                 aria-label={`${sec} seconds`}
+                className="h-7 min-w-13 px-2.5 text-xs font-medium tracking-wide"
               >
                 {sec}s
               </ToggleGroupItem>
@@ -224,7 +234,8 @@ export default function TypingEngine() {
             className="flex gap-6"
           >
             <div>
-              wpm: <span className="font-bold text-foreground">{currentWpm}</span>
+              wpm:{" "}
+              <span className="font-bold text-foreground">{currentWpm}</span>
             </div>
             <div>
               acc:{" "}
@@ -339,7 +350,7 @@ export default function TypingEngine() {
               </div>
 
               {/* RIGHT SLOT: Next Word */}
-              <div className="pointer-events-none flex justify-start overflow-hidden pl-16 text-2xl font-bold whitespace-nowrap text-muted-foreground opacity-40 select-none">
+              <div className="pointer-events-none flex justify-start overflow-hidden pl-16 text-2xl font-bold whitespace-nowrap text-muted-foreground opacity-60 select-none">
                 <AnimatePresence mode="popLayout">
                   <motion.span
                     key={`next-${currentIndex}`}
