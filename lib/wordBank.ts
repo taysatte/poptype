@@ -1,11 +1,13 @@
 export interface WordBank {
-  bronze: string[]
-  silver: string[]
-  gold: string[]
+  easy: string[]
+  medium: string[]
+  hard: string[]
 }
 
+export type Difficulty = keyof WordBank
+
 export const wordBank: WordBank = {
-  bronze: [
+  easy: [
     "cat",
     "dog",
     "rust",
@@ -37,7 +39,7 @@ export const wordBank: WordBank = {
     "file",
     "loop",
   ],
-  silver: [
+  medium: [
     "engine",
     "buffer",
     "canvas",
@@ -63,7 +65,7 @@ export const wordBank: WordBank = {
     "unzip",
     "render",
   ],
-  gold: [
+  hard: [
     "abstract",
     "monopoly",
     "synergy",

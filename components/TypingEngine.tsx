@@ -1,21 +1,29 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { generateQueue, WordBank } from "@/lib/wordBank"
+import { generateQueue, type Difficulty } from "@/lib/wordBank"
 
-const SESSION_DURATION = 15
+const SESSION_OPTIONS = [15, 30] as const
+type SessionDuration = (typeof SESSION_OPTIONS)[number]
+
+const DIFFICULTY_TIERS = ["easy", "medium", "hard"] as const satisfies readonly Difficulty[]
+
+function queueSizeFor(duration: SessionDuration): number {
+  return duration === 30 ? 60 : 40
+}
 
 export default function TypingEngine() {
   // Config States
-  const [difficulty, setDifficulty] = useState<keyof WordBank>("bronze")
+  const [difficulty, setDifficulty] = useState<Difficulty>("easy")
+  const [sessionDuration, setSessionDuration] = useState<SessionDuration>(15)
   const [wordQueue, setWordQueue] = useState<string[]>([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [typedValue, setTypedValue] = useState("")
   const [isError, setIsError] = useState(false)
 
   // Session & Timer States
-  const [timeLeft, setTimeLeft] = useState(SESSION_DURATION)
+  const [timeLeft, setTimeLeft] = useState<number>(15)
   const [isSessionActive, setIsSessionActive] = useState(false)
   const [isSessionFinished, setIsSessionFinished] = useState(false)
 
@@ -27,23 +35,30 @@ export default function TypingEngine() {
   const inputRef = useRef<HTMLInputElement>(null)
   const timerRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Initialize and rebuild word queue based on difficulty adjustments
+  const focusInput = useCallback(() => {
+    if (!isSessionFinished) {
+      inputRef.current?.focus()
+    }
+  }, [isSessionFinished])
+
+  // Rebuild queue and timer when idle config changes
   useEffect(() => {
-    setWordQueue(generateQueue(difficulty, 40))
+    if (isSessionActive) return
+
+    setWordQueue(generateQueue(difficulty, queueSizeFor(sessionDuration)))
     setCurrentIndex(0)
     setTypedValue("")
     setIsError(false)
-  }, [difficulty])
+    setTimeLeft(sessionDuration)
+  }, [difficulty, sessionDuration, isSessionActive])
 
   const prevWord = currentIndex > 0 ? wordQueue[currentIndex - 1] : ""
   const currentWord = wordQueue[currentIndex] || ""
   const nextWord = wordQueue[(currentIndex + 1) % wordQueue.length] || ""
 
   useEffect(() => {
-    if (!isSessionFinished) {
-      inputRef.current?.focus()
-    }
-  }, [currentIndex, isSessionFinished, wordQueue])
+    focusInput()
+  }, [currentIndex, wordQueue, focusInput])
 
   useEffect(() => {
     if (isSessionActive && timeLeft > 0) {
@@ -108,31 +123,33 @@ export default function TypingEngine() {
     }
   }
 
-  const resetSession = () => {
+  const resetSession = useCallback(() => {
     if (timerRef.current) clearInterval(timerRef.current)
-    setWordQueue(generateQueue(difficulty, 40))
+    setWordQueue(generateQueue(difficulty, queueSizeFor(sessionDuration)))
     setCurrentIndex(0)
     setTypedValue("")
     setIsError(false)
-    setTimeLeft(SESSION_DURATION)
+    setTimeLeft(sessionDuration)
     setIsSessionActive(false)
     setIsSessionFinished(false)
     setTotalKeysPressed(0)
     setCorrectKeysPressed(0)
     setWordsCleared(0)
-  }
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }, [difficulty, sessionDuration])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        e.preventDefault()
         resetSession()
       }
     }
     window.addEventListener("keydown", handleKeyDown)
     return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [difficulty])
+  }, [resetSession])
 
-  const timeElapsed = SESSION_DURATION - timeLeft
+  const timeElapsed = sessionDuration - timeLeft
   const currentWpm =
     timeElapsed > 0 ? Math.round((wordsCleared / timeElapsed) * 60) : 0
   const currentAccuracy =
@@ -143,24 +160,43 @@ export default function TypingEngine() {
   return (
     <div
       className="relative flex min-h-[500px] w-full flex-col items-center justify-center font-mono select-none"
-      onClick={() => !isSessionFinished && inputRef.current?.focus()}
+      onClick={focusInput}
+      onPointerDown={focusInput}
     >
       {/* Config Sub-Bar (Hidden during active typing runs for extreme focus) */}
       {!isSessionActive && !isSessionFinished && (
-        <div className="absolute top-[-40px] flex gap-4 rounded-lg border border-zinc-800/60 bg-zinc-900/40 px-3 py-1.5 text-xs">
-          {(["bronze", "silver", "gold"] as const).map((tier) => (
-            <button
-              key={tier}
-              onClick={() => setDifficulty(tier)}
-              className={`rounded px-2 py-0.5 font-bold tracking-wider lowercase transition-all ${
-                difficulty === tier
-                  ? "scale-105 bg-zinc-100 font-black text-zinc-950"
-                  : "text-zinc-500 hover:text-zinc-300"
-              }`}
-            >
-              {tier}
-            </button>
-          ))}
+        <div className="absolute top-[-40px] flex items-center gap-4 rounded-lg border border-zinc-800/60 bg-zinc-900/40 px-3 py-1.5 text-xs">
+          <div className="flex gap-4">
+            {DIFFICULTY_TIERS.map((tier) => (
+              <button
+                key={tier}
+                onClick={() => setDifficulty(tier)}
+                className={`rounded px-2 py-0.5 font-bold tracking-wider lowercase transition-all ${
+                  difficulty === tier
+                    ? "scale-105 bg-zinc-100 font-black text-zinc-950"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {tier}
+              </button>
+            ))}
+          </div>
+          <span className="text-zinc-700">|</span>
+          <div className="flex gap-2">
+            {SESSION_OPTIONS.map((sec) => (
+              <button
+                key={sec}
+                onClick={() => setSessionDuration(sec)}
+                className={`rounded px-2 py-0.5 font-bold tracking-wider transition-all ${
+                  sessionDuration === sec
+                    ? "scale-105 bg-zinc-100 font-black text-zinc-950"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {sec}s
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
@@ -205,7 +241,7 @@ export default function TypingEngine() {
             {/* The Sliding Horizon Container */}
             <div className="relative grid h-full w-full grid-cols-3 items-center justify-center">
               {/* LEFT SLOT: Previous Word */}
-              <div className="pointer-events-none flex justify-end overflow-hidden pr-16 text-2xl font-bold whitespace-nowrap text-zinc-800 opacity-30 select-none">
+              <div className="pointer-events-none flex justify-end overflow-hidden pr-16 text-2xl font-bold whitespace-nowrap text-primary-foreground/50 line-through select-none">
                 <AnimatePresence mode="popLayout">
                   <motion.span
                     key={`prev-${currentIndex}`}
@@ -375,7 +411,7 @@ export default function TypingEngine() {
         <div className="mt-16 text-xs tracking-widest text-zinc-600 uppercase">
           {isSessionActive
             ? "[ clock ticking — push pace ]"
-            : "[ select difficulty then start typing ]"}
+            : "[ select difficulty & duration, then start typing ]"}
         </div>
       )}
     </div>
