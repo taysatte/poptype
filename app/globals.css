@@ -165,20 +165,24 @@
     animation: shake 0.15s ease-in-out;
   }
 
-  /* Config bar: one track, soft sliding pill (readable in light + dark) */
+  /* Config segments: bordered shell, label cap + transparent toggle track */
   .poptype-config [data-slot="toggle-group-highlight"] {
-    @apply rounded-md bg-background shadow-sm ring-1 ring-border/50;
+    @apply rounded-r-md bg-background shadow-sm ring-1 ring-border/50;
   }
 
   .poptype-config [data-slot="toggle-group-item"][data-state="on"] {
-    @apply font-medium text-foreground;
+    @apply bg-transparent font-medium text-foreground;
   }
 
   .poptype-config [data-slot="toggle-group-item"][data-state="off"] {
-    @apply text-muted-foreground;
+    @apply bg-transparent text-muted-foreground;
   }
 
   .dark .poptype-config [data-slot="toggle-group-highlight"] {
     @apply bg-card ring-border/60;
+  }
+
+  .poptype-arena-overlay {
+    @apply bg-background/30 backdrop-blur-[3px];
   }
 }
