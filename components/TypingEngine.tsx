@@ -41,7 +41,9 @@ export default function TypingEngine() {
   // Config States
   const [difficulty, setDifficulty] = useState<Difficulty>("easy")
   const [sessionDuration, setSessionDuration] = useState<SessionDuration>(15)
-  const [wordQueue, setWordQueue] = useState<string[]>([])
+  const [wordQueue, setWordQueue] = useState(() =>
+    generateQueue("easy", queueSizeFor(15))
+  )
   const [currentIndex, setCurrentIndex] = useState(0)
   const [typedValue, setTypedValue] = useState("")
   const [isError, setIsError] = useState(false)
@@ -67,22 +69,36 @@ export default function TypingEngine() {
     }
   }, [isSessionFinished])
 
-  // Reshuffle queue when difficulty changes (idle only); duration does not reshuffle
-  useEffect(() => {
-    if (isSessionActive || isSessionFinished) return
+  const applyIdleDifficulty = useCallback(
+    (next: Difficulty) => {
+      setDifficulty(next)
+      if (!isSessionActive && !isSessionFinished) {
+        setWordQueue(generateQueue(next, queueSizeFor(sessionDuration)))
+        setCurrentIndex(0)
+        setTypedValue("")
+        setIsError(false)
+      }
+    },
+    [isSessionActive, isSessionFinished, sessionDuration]
+  )
 
-    setWordQueue(generateQueue(difficulty, queueSizeFor(sessionDuration)))
-    setCurrentIndex(0)
-    setTypedValue("")
-    setIsError(false)
-    // sessionDuration intentionally omitted — duration-only changes must not reshuffle
-  }, [difficulty, isSessionActive, isSessionFinished])
+  const applyIdleDuration = useCallback(
+    (sec: SessionDuration) => {
+      setSessionDuration(sec)
+      if (!isSessionActive && !isSessionFinished) {
+        setTimeLeft(sec)
+      }
+    },
+    [isSessionActive, isSessionFinished]
+  )
 
-  // Sync countdown preset when duration changes (idle only)
-  useEffect(() => {
-    if (isSessionActive || isSessionFinished) return
-    setTimeLeft(sessionDuration)
-  }, [sessionDuration, isSessionActive, isSessionFinished])
+  const finishSession = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current)
+    timerRef.current = null
+    setIsSessionActive(false)
+    setIsSessionFinished(true)
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }, [])
 
   const prevWord = currentIndex > 0 ? wordQueue[currentIndex - 1] : ""
   const currentWord = wordQueue[currentIndex] || ""
@@ -97,21 +113,25 @@ export default function TypingEngine() {
   }, [currentIndex, wordQueue, focusInput])
 
   useEffect(() => {
-    if (isSessionActive && timeLeft > 0) {
-      timerRef.current = setInterval(() => {
-        setTimeLeft((prev) => prev - 1)
-      }, 1000)
-    } else if (timeLeft === 0 && isSessionActive) {
-      setIsSessionActive(false)
-      setIsSessionFinished(true)
-      if (timerRef.current) clearInterval(timerRef.current)
-      requestAnimationFrame(() => inputRef.current?.focus())
-    }
+    if (!isSessionActive) return
+
+    const id = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(id)
+          queueMicrotask(finishSession)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    timerRef.current = id
 
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current)
+      clearInterval(id)
+      if (timerRef.current === id) timerRef.current = null
     }
-  }, [isSessionActive, timeLeft])
+  }, [isSessionActive, finishSession])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isSessionFinished) return
@@ -256,9 +276,9 @@ export default function TypingEngine() {
                 sessionDuration={sessionDuration}
                 sessionOptions={SESSION_OPTIONS}
                 showNextWord={showNextWord}
-                onDifficultyChange={setDifficulty}
+                onDifficultyChange={applyIdleDifficulty}
                 onDurationChange={(sec) =>
-                  setSessionDuration(sec as SessionDuration)
+                  applyIdleDuration(sec as SessionDuration)
                 }
                 onShowNextWordChange={setShowNextWord}
               />

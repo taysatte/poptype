@@ -165,15 +165,20 @@ function Highlight<T extends React.ElementType = "div">({
     }
   }, [boundsOffsetTop, boundsOffsetLeft, boundsOffsetWidth, boundsOffsetHeight])
 
-  const [activeValue, setActiveValue] = React.useState<string | null>(
-    value ?? defaultValue ?? null
-  )
+  const [uncontrolledActive, setUncontrolledActive] = React.useState<
+    string | null
+  >(defaultValue ?? null)
+  const activeValue = value !== undefined ? value : uncontrolledActive
   const [boundsState, setBoundsState] = React.useState<Bounds | null>(null)
   const [activeClassNameState, setActiveClassNameState] =
     React.useState<string>("")
 
   const safeSetActiveValue = (id: string | null) => {
-    setActiveValue((prev) => {
+    if (value !== undefined) {
+      if (id !== value) onValueChange?.(id)
+      return
+    }
+    setUncontrolledActive((prev) => {
       if (prev !== id) {
         onValueChange?.(id)
         return id
@@ -221,11 +226,6 @@ function Highlight<T extends React.ElementType = "div">({
   const clearBounds = React.useCallback(() => {
     setBoundsState((prev) => (prev === null ? prev : null))
   }, [])
-
-  React.useEffect(() => {
-    if (value !== undefined) setActiveValue(value)
-    else if (defaultValue !== undefined) setActiveValue(defaultValue)
-  }, [value, defaultValue])
 
   const id = React.useId()
 
