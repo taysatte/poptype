@@ -27,6 +27,8 @@ function isPoptypeConfigTarget(target: EventTarget | null): boolean {
 }
 
 const CHAR_SLOT_PX = 42
+/** Fixed seed so the first SSR + hydrate render the same word queue. */
+const INITIAL_QUEUE_SEED = 1
 
 /** Side gap scales with the active word so neighbors do not overlap long targets. */
 function carouselSpacing(word: string) {
@@ -42,7 +44,7 @@ export default function TypingEngine() {
   const [difficulty, setDifficulty] = useState<Difficulty>("easy")
   const [sessionDuration, setSessionDuration] = useState<SessionDuration>(15)
   const [wordQueue, setWordQueue] = useState(() =>
-    generateQueue("easy", queueSizeFor(15))
+    generateQueue("easy", queueSizeFor(15), INITIAL_QUEUE_SEED)
   )
   const [currentIndex, setCurrentIndex] = useState(0)
   const [typedValue, setTypedValue] = useState("")
