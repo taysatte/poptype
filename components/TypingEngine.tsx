@@ -3,30 +3,54 @@
 import React, { useState, useEffect, useRef, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import SessionConfig from "@/components/SessionConfig"
 import { generateQueue, type Difficulty } from "@/lib/wordBank"
 
-const SESSION_OPTIONS = [15, 30] as const
+const SESSION_OPTIONS = [15, 30, 45, 60] as const
 type SessionDuration = (typeof SESSION_OPTIONS)[number]
 
-const DIFFICULTY_TIERS = [
-  "easy",
-  "medium",
-  "hard",
-] as const satisfies readonly Difficulty[]
-
 function queueSizeFor(duration: SessionDuration): number {
-  return duration === 30 ? 60 : 40
+  const sizes: Record<SessionDuration, number> = {
+    15: 40,
+    30: 60,
+    45: 80,
+    60: 100,
+  }
+  return sizes[duration]
+}
+
+function isPoptypeConfigTarget(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    target.closest("[data-poptype-config]") !== null
+  )
+}
+
+const CHAR_SLOT_PX = 42
+/** Fixed seed so the first SSR + hydrate render the same word queue. */
+const INITIAL_QUEUE_SEED = 1
+
+/** Side gap scales with the active word so neighbors do not overlap long targets. */
+function carouselSpacing(word: string) {
+  const len = Math.max(word.length, 1)
+  return {
+    centerWidth: len * CHAR_SLOT_PX,
+    gap: Math.max(48, Math.min(176, len * 10 + 32)),
+  }
 }
 
 export default function TypingEngine() {
   // Config States
   const [difficulty, setDifficulty] = useState<Difficulty>("easy")
   const [sessionDuration, setSessionDuration] = useState<SessionDuration>(15)
-  const [wordQueue, setWordQueue] = useState<string[]>([])
+  const [wordQueue, setWordQueue] = useState(() =>
+    generateQueue("easy", queueSizeFor(15), INITIAL_QUEUE_SEED)
+  )
   const [currentIndex, setCurrentIndex] = useState(0)
   const [typedValue, setTypedValue] = useState("")
   const [isError, setIsError] = useState(false)
+  const [isInputFocused, setIsInputFocused] = useState(false)
+  const [showNextWord, setShowNextWord] = useState(true)
 
   // Session & Timer States
   const [timeLeft, setTimeLeft] = useState<number>(15)
@@ -47,41 +71,69 @@ export default function TypingEngine() {
     }
   }, [isSessionFinished])
 
-  // Rebuild queue and timer when idle config changes (not after a completed run)
-  useEffect(() => {
-    if (isSessionActive || isSessionFinished) return
+  const applyIdleDifficulty = useCallback(
+    (next: Difficulty) => {
+      setDifficulty(next)
+      if (!isSessionActive && !isSessionFinished) {
+        setWordQueue(generateQueue(next, queueSizeFor(sessionDuration)))
+        setCurrentIndex(0)
+        setTypedValue("")
+        setIsError(false)
+      }
+    },
+    [isSessionActive, isSessionFinished, sessionDuration]
+  )
 
-    setWordQueue(generateQueue(difficulty, queueSizeFor(sessionDuration)))
-    setCurrentIndex(0)
-    setTypedValue("")
-    setIsError(false)
-    setTimeLeft(sessionDuration)
-  }, [difficulty, sessionDuration, isSessionActive, isSessionFinished])
+  const applyIdleDuration = useCallback(
+    (sec: SessionDuration) => {
+      setSessionDuration(sec)
+      if (!isSessionActive && !isSessionFinished) {
+        setTimeLeft(sec)
+      }
+    },
+    [isSessionActive, isSessionFinished]
+  )
+
+  const finishSession = useCallback(() => {
+    if (timerRef.current) clearInterval(timerRef.current)
+    timerRef.current = null
+    setIsSessionActive(false)
+    setIsSessionFinished(true)
+    requestAnimationFrame(() => inputRef.current?.focus())
+  }, [])
 
   const prevWord = currentIndex > 0 ? wordQueue[currentIndex - 1] : ""
   const currentWord = wordQueue[currentIndex] || ""
   const nextWord = wordQueue[(currentIndex + 1) % wordQueue.length] || ""
+  const { centerWidth, gap: carouselGap } = carouselSpacing(currentWord)
+
+  const showArenaFocusHint =
+    !isInputFocused && !isSessionFinished && !isSessionActive
 
   useEffect(() => {
     focusInput()
   }, [currentIndex, wordQueue, focusInput])
 
   useEffect(() => {
-    if (isSessionActive && timeLeft > 0) {
-      timerRef.current = setInterval(() => {
-        setTimeLeft((prev) => prev - 1)
-      }, 1000)
-    } else if (timeLeft === 0 && isSessionActive) {
-      setIsSessionActive(false)
-      setIsSessionFinished(true)
-      if (timerRef.current) clearInterval(timerRef.current)
-      requestAnimationFrame(() => inputRef.current?.focus())
-    }
+    if (!isSessionActive) return
+
+    const id = setInterval(() => {
+      setTimeLeft((prev) => {
+        if (prev <= 1) {
+          clearInterval(id)
+          queueMicrotask(finishSession)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+    timerRef.current = id
 
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current)
+      clearInterval(id)
+      if (timerRef.current === id) timerRef.current = null
     }
-  }, [isSessionActive, timeLeft])
+  }, [isSessionActive, finishSession])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (isSessionFinished) return
@@ -166,100 +218,97 @@ export default function TypingEngine() {
       ? Math.round((correctKeysPressed / totalKeysPressed) * 100)
       : 100
 
+  const handleRootPointerDown = (e: React.PointerEvent) => {
+    if (!isPoptypeConfigTarget(e.target)) focusInput()
+  }
+
+  const handleRootClick = (e: React.MouseEvent) => {
+    if (!isPoptypeConfigTarget(e.target)) focusInput()
+  }
+
+  const handleInputBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    const next = e.relatedTarget
+    if (
+      next instanceof Node &&
+      document.querySelector("[data-poptype-config]")?.contains(next)
+    ) {
+      return
+    }
+    setIsInputFocused(false)
+  }
+
   return (
     <div
-      className="relative flex min-h-[500px] w-full flex-col items-center justify-center font-mono select-none"
-      onClick={focusInput}
-      onPointerDown={focusInput}
+      className="relative flex h-full min-h-0 w-full max-w-6xl items-center justify-center font-mono select-none"
+      onClick={handleRootClick}
+      onPointerDown={handleRootPointerDown}
     >
-      {/* Config Sub-Bar (Hidden during active typing runs for extreme focus) */}
-      {!isSessionActive && !isSessionFinished && (
-        <div className="poptype-config absolute top-[-40px] flex items-center gap-0.5 rounded-lg bg-muted p-1">
-          <ToggleGroup
-            type="single"
-            size="sm"
-            value={difficulty}
-            onValueChange={(v) => v && setDifficulty(v as Difficulty)}
-            className="gap-0 border-0 p-0 shadow-none"
-          >
-            {DIFFICULTY_TIERS.map((tier) => (
-              <ToggleGroupItem
-                key={tier}
-                value={tier}
-                aria-label={tier}
-                className="h-7 min-w-13 px-2.5 text-xs font-medium tracking-wide lowercase"
-              >
-                {tier}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-          <div className="mx-0.5 h-4 w-px shrink-0 bg-border/70" aria-hidden />
-          <ToggleGroup
-            type="single"
-            size="sm"
-            value={String(sessionDuration)}
-            onValueChange={(v) =>
-              v && setSessionDuration(Number(v) as SessionDuration)
-            }
-            className="gap-0 border-0 p-0 shadow-none"
-          >
-            {SESSION_OPTIONS.map((sec) => (
-              <ToggleGroupItem
-                key={sec}
-                value={String(sec)}
-                aria-label={`${sec} seconds`}
-                className="h-7 min-w-13 px-2.5 text-xs font-medium tracking-wide"
-              >
-                {sec}s
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
+      {(isSessionActive || (!isSessionActive && !isSessionFinished)) && (
+        <div className="pointer-events-none fixed inset-x-0 top-24 z-20 flex justify-center px-4">
+          <div className="pointer-events-auto flex w-full max-w-6xl flex-wrap items-center justify-center gap-x-6 gap-y-2 text-sm tracking-wider text-muted-foreground">
+            {isSessionActive && (
+              <div className="flex flex-wrap items-center justify-center gap-6">
+                <div>
+                  time:{" "}
+                  <span className="font-bold text-foreground">{timeLeft}s</span>
+                </div>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex gap-6"
+                >
+                  <div>
+                    wpm:{" "}
+                    <span className="font-bold text-foreground">
+                      {currentWpm}
+                    </span>
+                  </div>
+                  <div>
+                    acc:{" "}
+                    <span className="font-bold text-foreground">
+                      {currentAccuracy}%
+                    </span>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+            {!isSessionActive && !isSessionFinished && (
+              <SessionConfig
+                difficulty={difficulty}
+                sessionDuration={sessionDuration}
+                sessionOptions={SESSION_OPTIONS}
+                showNextWord={showNextWord}
+                onDifficultyChange={applyIdleDifficulty}
+                onDurationChange={(sec) =>
+                  applyIdleDuration(sec as SessionDuration)
+                }
+                onShowNextWordChange={setShowNextWord}
+              />
+            )}
+          </div>
         </div>
       )}
 
-      {/* Live Sleek Timer / Status Header Banner */}
-      <div className="mb-12 flex h-6 items-center gap-12 text-sm tracking-wider text-muted-foreground">
-        <div>
-          time:{" "}
-          <span
-            className={`font-bold transition-colors ${isSessionActive ? "text-foreground" : "text-muted-foreground"}`}
-          >
-            {timeLeft}s
-          </span>
-        </div>
-        {isSessionActive && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex gap-6"
-          >
-            <div>
-              wpm:{" "}
-              <span className="font-bold text-foreground">{currentWpm}</span>
-            </div>
-            <div>
-              acc:{" "}
-              <span className="font-bold text-foreground">
-                {currentAccuracy}%
-              </span>
-            </div>
-          </motion.div>
-        )}
-      </div>
-
       <AnimatePresence mode="wait">
         {!isSessionFinished ? (
-          /* The Carousel Viewport Arena */
           <motion.div
             key="game-active"
             exit={{ opacity: 0, y: -20 }}
             id="carousel-viewport"
-            className="relative flex h-32 w-full max-w-5xl items-center justify-center overflow-hidden px-4"
+            className="relative flex h-32 w-full max-w-6xl items-center justify-center overflow-hidden px-4"
           >
-            {/* The Sliding Horizon Container */}
-            <div className="relative grid h-full w-full grid-cols-3 items-center justify-center">
-              {/* LEFT SLOT: Previous Word */}
-              <div className="pointer-events-none flex justify-end overflow-hidden pr-16 text-2xl font-bold whitespace-nowrap text-muted-foreground line-through select-none">
+            {showArenaFocusHint && (
+              <div
+                className="poptype-arena-overlay pointer-events-none absolute inset-0 z-20 transition-opacity duration-200"
+                aria-hidden
+              />
+            )}
+
+            <div
+              className="flex h-full w-full max-w-full items-center"
+              style={{ gap: carouselGap }}
+            >
+              <div className="pointer-events-none flex min-w-0 flex-1 basis-0 justify-end overflow-hidden text-2xl font-bold whitespace-nowrap text-muted-foreground line-through select-none">
                 <AnimatePresence mode="popLayout">
                   <motion.span
                     key={`prev-${currentIndex}`}
@@ -274,8 +323,10 @@ export default function TypingEngine() {
                 </AnimatePresence>
               </div>
 
-              {/* CENTER SLOT: Active Typing Target */}
-              <div className="relative z-10 flex h-full items-center justify-center text-6xl font-black tracking-tight">
+              <div
+                className="relative z-10 flex h-full shrink-0 items-center justify-center text-6xl font-black tracking-tight"
+                style={{ width: centerWidth }}
+              >
                 <AnimatePresence mode="popLayout">
                   <motion.div
                     key={`current-${currentIndex}`}
@@ -309,7 +360,8 @@ export default function TypingEngine() {
                       return (
                         <div
                           key={`${currentIndex}-char-${index}`}
-                          className="char-container w-[42px]"
+                          className="char-container"
+                          style={{ width: CHAR_SLOT_PX }}
                         >
                           {shouldPop ? (
                             <motion.span
@@ -349,25 +401,31 @@ export default function TypingEngine() {
                 </AnimatePresence>
               </div>
 
-              {/* RIGHT SLOT: Next Word */}
-              <div className="pointer-events-none flex justify-start overflow-hidden pl-16 text-2xl font-bold whitespace-nowrap text-muted-foreground opacity-60 select-none">
-                <AnimatePresence mode="popLayout">
-                  <motion.span
-                    key={`next-${currentIndex}`}
-                    initial={{ x: 30, opacity: 0 }}
-                    animate={{ x: 0, opacity: 0.4 }}
-                    exit={{ x: -30, opacity: 0 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 32 }}
-                    className="block lowercase"
-                  >
-                    {nextWord}
-                  </motion.span>
-                </AnimatePresence>
-              </div>
+              {showNextWord ? (
+                <div className="pointer-events-none flex min-w-0 flex-1 basis-0 justify-start overflow-hidden text-2xl font-bold whitespace-nowrap text-muted-foreground opacity-60 select-none">
+                  <AnimatePresence mode="popLayout">
+                    <motion.span
+                      key={`next-${currentIndex}`}
+                      initial={{ x: 30, opacity: 0 }}
+                      animate={{ x: 0, opacity: 0.4 }}
+                      exit={{ x: -30, opacity: 0 }}
+                      transition={{
+                        type: "spring",
+                        stiffness: 400,
+                        damping: 32,
+                      }}
+                      className="block lowercase"
+                    >
+                      {nextWord}
+                    </motion.span>
+                  </AnimatePresence>
+                </div>
+              ) : (
+                <div className="min-w-0 flex-1 basis-0" aria-hidden />
+              )}
             </div>
           </motion.div>
         ) : (
-          /* SESSION SUMMARY VIEW */
           <motion.div
             key="game-score"
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
@@ -419,6 +477,8 @@ export default function TypingEngine() {
         type="text"
         value={typedValue}
         onChange={handleInputChange}
+        onFocus={() => setIsInputFocused(true)}
+        onBlur={handleInputBlur}
         readOnly={isSessionFinished}
         aria-hidden={isSessionFinished}
         tabIndex={isSessionFinished ? -1 : 0}
@@ -428,14 +488,6 @@ export default function TypingEngine() {
         autoCorrect="off"
         spellCheck="false"
       />
-
-      {!isSessionFinished && (
-        <div className="mt-16 text-xs tracking-widest text-muted-foreground uppercase">
-          {isSessionActive
-            ? "[ clock ticking — push pace ]"
-            : "[ select difficulty & duration, then start typing ]"}
-        </div>
-      )}
     </div>
   )
 }

@@ -1,5 +1,5 @@
-import * as React from 'react';
-import { type VariantProps } from 'class-variance-authority';
+import * as React from "react"
+import { type VariantProps } from "class-variance-authority"
 
 import {
   ToggleGroup as ToggleGroupPrimitive,
@@ -9,16 +9,16 @@ import {
   useToggleGroup as useToggleGroupPrimitive,
   type ToggleGroupProps as ToggleGroupPrimitiveProps,
   type ToggleGroupItemProps as ToggleGroupItemPrimitiveProps,
-} from '@/components/animate-ui/primitives/radix/toggle-group';
-import { toggleVariants } from '@/components/animate-ui/components/radix/toggle';
-import { cn } from '@/lib/utils';
-import { getStrictContext } from '@/lib/get-strict-context';
+} from "@/components/animate-ui/primitives/radix/toggle-group"
+import { toggleVariants } from "@/components/animate-ui/components/radix/toggle"
+import { cn } from "@/lib/utils"
+import { getStrictContext } from "@/lib/get-strict-context"
 
 const [ToggleGroupProvider, useToggleGroup] =
-  getStrictContext<VariantProps<typeof toggleVariants>>('ToggleGroupContext');
+  getStrictContext<VariantProps<typeof toggleVariants>>("ToggleGroupContext")
 
 type ToggleGroupProps = ToggleGroupPrimitiveProps &
-  VariantProps<typeof toggleVariants>;
+  VariantProps<typeof toggleVariants>
 
 function ToggleGroup({
   className,
@@ -32,13 +32,13 @@ function ToggleGroup({
       data-variant={variant}
       data-size={size}
       className={cn(
-        'group/toggle-group flex gap-0.5 w-fit items-center rounded-lg data-[variant=outline]:shadow-xs data-[variant=outline]:border data-[variant=outline]:p-0.5',
-        className,
+        "group/toggle-group flex w-fit items-center gap-0.5 rounded-lg data-[variant=outline]:border data-[variant=outline]:p-0.5 data-[variant=outline]:shadow-xs",
+        className
       )}
       {...props}
     >
       <ToggleGroupProvider value={{ variant, size }}>
-        {props.type === 'single' ? (
+        {props.type === "single" ? (
           <ToggleGroupHighlightPrimitive className="rounded-md bg-accent">
             {children}
           </ToggleGroupHighlightPrimitive>
@@ -47,11 +47,11 @@ function ToggleGroup({
         )}
       </ToggleGroupProvider>
     </ToggleGroupPrimitive>
-  );
+  )
 }
 
 type ToggleGroupItemProps = ToggleGroupItemPrimitiveProps &
-  VariantProps<typeof toggleVariants>;
+  VariantProps<typeof toggleVariants>
 
 function ToggleGroupItem({
   className,
@@ -60,13 +60,13 @@ function ToggleGroupItem({
   size,
   ...props
 }: ToggleGroupItemProps) {
-  const { variant: contextVariant, size: contextSize } = useToggleGroup();
-  const { type } = useToggleGroupPrimitive();
+  const { variant: contextVariant, size: contextSize } = useToggleGroup()
+  const { type } = useToggleGroupPrimitive()
 
   return (
     <ToggleGroupHighlightItemPrimitive
       value={props.value}
-      className={cn(type === 'multiple' && 'rounded-md bg-accent')}
+      className={cn(type === "multiple" && "rounded-md bg-accent")}
     >
       <ToggleGroupItemPrimitive
         data-variant={contextVariant || variant}
@@ -76,15 +76,15 @@ function ToggleGroupItem({
             variant: contextVariant || variant,
             size: contextSize || size,
           }),
-          'min-w-0 border-0 flex-1 shrink-0 shadow-none rounded-md focus:z-10 focus-visible:z-10',
-          className,
+          "min-w-0 flex-1 shrink-0 rounded-md border-0 shadow-none focus:z-10 focus-visible:z-10",
+          className
         )}
         {...props}
       >
         {children}
       </ToggleGroupItemPrimitive>
     </ToggleGroupHighlightItemPrimitive>
-  );
+  )
 }
 
 export {
@@ -92,4 +92,4 @@ export {
   ToggleGroupItem,
   type ToggleGroupProps,
   type ToggleGroupItemProps,
-};
+}

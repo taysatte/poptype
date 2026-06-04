@@ -113,23 +113,36 @@ export const wordBank: WordBank = {
   hard: mergeTier("hard", frequencyByTier.hard),
 }
 
+/** Deterministic PRNG for SSR-safe initial queues (must match server + client). */
+function mulberry32(seed: number) {
+  let state = seed
+  return () => {
+    state |= 0
+    state = (state + 0x6d2b79f5) | 0
+    let t = Math.imul(state ^ (state >>> 15), state | 1)
+    t ^= t + Math.imul(t ^ (t >>> 7), state | 61)
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
 /**
- * Utility function to generate a randomized subset of words for a typing run
+ * Utility function to generate a randomized subset of words for a typing run.
+ * Pass `seed` when the queue must be identical on server and client (e.g. initial hydrate).
  */
 export function generateQueue(
   difficulty: keyof WordBank,
-  count: number = 50
+  count: number = 50,
+  seed?: number
 ): string[] {
   const pool = wordBank[difficulty]
   const shuffled = [...pool]
+  const random = seed !== undefined ? mulberry32(seed) : Math.random
 
   // Fisher-Yates Shuffle
   for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
+    const j = Math.floor(random() * (i + 1))
     ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
   }
 
-  // Slices a random cluster and loops it to ensure the pipeline never runs completely empty
-  const selected = shuffled.slice(0, count)
-  return selected
+  return shuffled.slice(0, count)
 }
