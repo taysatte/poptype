@@ -1,9 +1,14 @@
 "use client"
 
-import type { LucideIcon } from "lucide-react"
-import { Eye, Gauge, Timer } from "lucide-react"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/animate-ui/components/radix/dropdown-menu"
 import type { Difficulty } from "@/lib/wordBank"
+import { cn } from "@/lib/utils"
 
 const DIFFICULTY_TIERS = [
   "easy",
@@ -21,23 +26,65 @@ type SessionConfigProps = {
   onShowNextWordChange: (show: boolean) => void
 }
 
-function ConfigSegment({
-  icon: Icon,
-  label,
-  children,
-}: {
-  icon: LucideIcon
+type BracketOption<T extends string> = {
+  value: T
   label: string
-  children: React.ReactNode
-}) {
+}
+
+type BracketDropdownProps<T extends string> = {
+  value: T
+  options: readonly BracketOption<T>[]
+  onValueChange: (value: T) => void
+  ariaLabel: string
+}
+
+function BracketDropdown<T extends string>({
+  value,
+  options,
+  onValueChange,
+  ariaLabel,
+}: BracketDropdownProps<T>) {
+  const activeLabel =
+    options.find((option) => option.value === value)?.label ?? value
+
   return (
-    <div className="poptype-config flex overflow-hidden rounded-lg border border-border">
-      <span className="flex items-center gap-1.5 border-r border-border bg-transparent px-3 py-2 text-[10px] font-medium tracking-widest text-muted-foreground uppercase">
-        <Icon className="size-3 shrink-0" aria-hidden />
-        {label}
-      </span>
-      <div className="flex items-center bg-transparent p-1.5">{children}</div>
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={ariaLabel}
+          className={cn(
+            "inline rounded-sm align-baseline",
+            "font-medium text-foreground uppercase",
+            "transition-colors outline-none",
+            "hover:bg-foreground/5 focus-visible:ring-1 focus-visible:ring-ring"
+          )}
+        >
+          [{activeLabel}]
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        side="bottom"
+        align="center"
+        sideOffset={6}
+        className="z-50 min-w-32 border-border"
+      >
+        <DropdownMenuRadioGroup
+          value={value}
+          onValueChange={(next) => next && onValueChange(next as T)}
+        >
+          {options.map((option) => (
+            <DropdownMenuRadioItem
+              key={option.value}
+              value={option.value}
+              className="text-foreground uppercase"
+            >
+              {option.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }
 
@@ -50,79 +97,53 @@ export default function SessionConfig({
   onDurationChange,
   onShowNextWordChange,
 }: SessionConfigProps) {
+  const difficultyOptions = DIFFICULTY_TIERS.map((tier) => ({
+    value: tier,
+    label: tier,
+  }))
+
+  const durationOptions = sessionOptions.map((sec) => ({
+    value: String(sec),
+    label: `${sec}s`,
+  }))
+
+  const previewOptions = [
+    { value: "true", label: "on" },
+    { value: "false", label: "off" },
+  ] as const
+
   return (
     <div
       data-poptype-config
-      className="flex flex-wrap items-center justify-center gap-3 sm:gap-4"
+      className="max-w-2xl px-2 text-center text-sm leading-relaxed text-muted-foreground"
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
     >
-      <ConfigSegment icon={Gauge} label="difficulty">
-        <ToggleGroup
-          type="single"
-          size="sm"
+      <p className="m-0">
+        train explosive speed on{" "}
+        <BracketDropdown
           value={difficulty}
-          onValueChange={(v) => v && onDifficultyChange(v as Difficulty)}
-          className="gap-0 border-0 bg-transparent p-0 shadow-none"
-        >
-          {DIFFICULTY_TIERS.map((tier) => (
-            <ToggleGroupItem
-              key={tier}
-              value={tier}
-              aria-label={tier}
-              className="h-8 min-w-14 bg-transparent px-3 text-xs font-medium tracking-wide lowercase"
-            >
-              {tier}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      </ConfigSegment>
-
-      <ConfigSegment icon={Timer} label="duration">
-        <ToggleGroup
-          type="single"
-          size="sm"
+          options={difficultyOptions}
+          onValueChange={onDifficultyChange}
+          ariaLabel="Select difficulty tier"
+        />{" "}
+        tier for a duration of{" "}
+        <BracketDropdown
           value={String(sessionDuration)}
-          onValueChange={(v) => v && onDurationChange(Number(v))}
-          className="gap-0 border-0 bg-transparent p-0 shadow-none"
-        >
-          {sessionOptions.map((sec) => (
-            <ToggleGroupItem
-              key={sec}
-              value={String(sec)}
-              aria-label={`${sec} seconds`}
-              className="h-8 min-w-12 bg-transparent px-3 text-xs font-medium tracking-wide"
-            >
-              {sec}s
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      </ConfigSegment>
-
-      <ConfigSegment icon={Eye} label="preview">
-        <ToggleGroup
-          type="single"
-          size="sm"
+          options={durationOptions}
+          onValueChange={(v) => onDurationChange(Number(v))}
+          ariaLabel="Select session duration"
+        />
+      </p>
+      <p className="m-0 mt-1">
+        with target horizon queue preview set to{" "}
+        <BracketDropdown
           value={showNextWord ? "true" : "false"}
-          onValueChange={(v) => v && onShowNextWordChange(v === "true")}
-          className="gap-0 border-0 bg-transparent p-0 shadow-none"
-        >
-          <ToggleGroupItem
-            value="true"
-            aria-label="Show next word"
-            className="h-8 min-w-12 bg-transparent px-3 text-xs font-medium tracking-wide"
-          >
-            on
-          </ToggleGroupItem>
-          <ToggleGroupItem
-            value="false"
-            aria-label="Hide next word"
-            className="h-8 min-w-12 bg-transparent px-3 text-xs font-medium tracking-wide"
-          >
-            off
-          </ToggleGroupItem>
-        </ToggleGroup>
-      </ConfigSegment>
+          options={previewOptions}
+          onValueChange={(v) => onShowNextWordChange(v === "true")}
+          ariaLabel="Select next word preview"
+        />
+      </p>
     </div>
   )
 }
