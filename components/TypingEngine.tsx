@@ -197,16 +197,16 @@ export default function TypingEngine() {
     requestAnimationFrame(() => inputRef.current?.focus())
   }, [difficulty, sessionDuration])
 
-  // useEffect(() => {
-  //   const handleKeyDown = (e: KeyboardEvent) => {
-  //     if (e.key === "Escape") {
-  //       e.preventDefault()
-  //       resetSession()
-  //     }
-  //   }
-  //   window.addEventListener("keydown", handleKeyDown)
-  //   return () => window.removeEventListener("keydown", handleKeyDown)
-  // }, [resetSession])
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !isSessionActive) {
+        e.preventDefault()
+        resetSession()
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [resetSession, isSessionActive])
 
   const timeElapsed = isSessionFinished
     ? sessionDuration
