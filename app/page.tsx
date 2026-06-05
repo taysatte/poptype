@@ -5,7 +5,7 @@ export default function Home() {
     <main className="relative flex min-h-screen flex-col items-center overflow-hidden bg-background p-8">
       {/* Header Space */}
       <div className="flex w-full max-w-6xl shrink-0 items-center justify-between font-mono text-sm text-muted-foreground">
-        <span className="text-xl font-black tracking-tighter text-foreground">
+        <span className="text-2xl font-black tracking-tighter text-foreground">
           poptype.
         </span>
         <span>v1.0.0-alpha</span>

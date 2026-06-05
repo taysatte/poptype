@@ -197,16 +197,16 @@ export default function TypingEngine() {
     requestAnimationFrame(() => inputRef.current?.focus())
   }, [difficulty, sessionDuration])
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault()
-        resetSession()
-      }
-    }
-    window.addEventListener("keydown", handleKeyDown)
-    return () => window.removeEventListener("keydown", handleKeyDown)
-  }, [resetSession])
+  // useEffect(() => {
+  //   const handleKeyDown = (e: KeyboardEvent) => {
+  //     if (e.key === "Escape") {
+  //       e.preventDefault()
+  //       resetSession()
+  //     }
+  //   }
+  //   window.addEventListener("keydown", handleKeyDown)
+  //   return () => window.removeEventListener("keydown", handleKeyDown)
+  // }, [resetSession])
 
   const timeElapsed = isSessionFinished
     ? sessionDuration
@@ -308,12 +308,12 @@ export default function TypingEngine() {
               className="flex h-full w-full max-w-full items-center"
               style={{ gap: carouselGap }}
             >
-              <div className="pointer-events-none flex min-w-0 flex-1 basis-0 justify-end overflow-hidden text-2xl font-bold whitespace-nowrap text-muted-foreground line-through select-none">
+              <div className="pointer-events-none flex min-w-0 flex-1 basis-0 justify-end overflow-hidden text-2xl font-bold whitespace-nowrap text-muted-foreground/30 line-through select-none">
                 <AnimatePresence mode="popLayout">
                   <motion.span
                     key={`prev-${currentIndex}`}
                     initial={{ x: 30, opacity: 0 }}
-                    animate={{ x: 0, opacity: 0.3 }}
+                    animate={{ x: 0, opacity: 0.2 }}
                     exit={{ x: -30, opacity: 0 }}
                     transition={{ type: "spring", stiffness: 400, damping: 32 }}
                     className="block lowercase"
@@ -342,25 +342,47 @@ export default function TypingEngine() {
                     className="absolute flex items-center justify-center"
                   >
                     {currentWord.split("").map((char, index) => {
-                      let colorClass = "text-muted-foreground"
+                      // High-contrast clean visibility split
+                      let colorClass = "text-zinc-600 dark:text-zinc-500" // Crisp distinct untyped gray
                       let shouldPop = false
 
+                      // Find the exact starting position of divergence
+                      const firstErrorIndex = currentWord
+                        .split("")
+                        .findIndex(
+                          (c, i) => i < typedValue.length && typedValue[i] !== c
+                        )
+
                       if (index < typedValue.length) {
-                        if (typedValue[index] === currentWord[index]) {
-                          colorClass = "text-foreground"
+                        if (
+                          firstErrorIndex !== -1 &&
+                          index >= firstErrorIndex
+                        ) {
+                          // Freeze: only light up the exact mistake index
+                          if (index === firstErrorIndex) {
+                            colorClass =
+                              "text-destructive bg-destructive/10 rounded-sm"
+                          } else {
+                            colorClass = "text-zinc-600 dark:text-zinc-500"
+                          }
+                        } else {
+                          colorClass = "text-foreground" // Bold white for correct strikes
                           if (index === typedValue.length - 1 && !isError) {
                             shouldPop = true
                           }
-                        } else {
-                          colorClass =
-                            "text-destructive bg-destructive/10 rounded-sm"
                         }
                       }
+
+                      // Dynamic cursor tracker targeting active input indices safely bounds checking
+                      const activeIndex = Math.min(
+                        typedValue.length,
+                        currentWord.length - 1
+                      )
 
                       return (
                         <div
                           key={`${currentIndex}-char-${index}`}
-                          className="char-container"
+                          className="char-container relative flex h-full flex-col items-center justify-center"
                           style={{ width: CHAR_SLOT_PX }}
                         >
                           {shouldPop ? (
@@ -383,14 +405,16 @@ export default function TypingEngine() {
                             </span>
                           )}
 
-                          {index === typedValue.length && (
+                          {index === activeIndex && (
                             <motion.div
                               layoutId="typing-cursor"
-                              className={`absolute right-0 bottom-[-10px] left-0 h-[3px] ${isError ? "bg-destructive" : "bg-foreground"}`}
+                              className={`absolute right-0 bottom-[-14px] left-0 h-[3px] rounded-full ${
+                                isError ? "bg-destructive" : "bg-foreground"
+                              }`}
                               transition={{
                                 type: "spring",
-                                stiffness: 500,
-                                damping: 35,
+                                stiffness: 600,
+                                damping: 38,
                               }}
                             />
                           )}
@@ -402,12 +426,12 @@ export default function TypingEngine() {
               </div>
 
               {showNextWord ? (
-                <div className="pointer-events-none flex min-w-0 flex-1 basis-0 justify-start overflow-hidden text-2xl font-bold whitespace-nowrap text-muted-foreground opacity-60 select-none">
+                <div className="pointer-events-none flex min-w-0 flex-1 basis-0 justify-start overflow-hidden text-2xl font-bold whitespace-nowrap text-muted-foreground opacity-40 select-none">
                   <AnimatePresence mode="popLayout">
                     <motion.span
                       key={`next-${currentIndex}`}
                       initial={{ x: 30, opacity: 0 }}
-                      animate={{ x: 0, opacity: 0.4 }}
+                      animate={{ x: 0, opacity: 0.3 }}
                       exit={{ x: -30, opacity: 0 }}
                       transition={{
                         type: "spring",
@@ -426,6 +450,7 @@ export default function TypingEngine() {
             </div>
           </motion.div>
         ) : (
+          /* SESSION SUMMARY VIEW */
           <motion.div
             key="game-score"
             initial={{ opacity: 0, scale: 0.95, y: 10 }}
