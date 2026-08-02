@@ -461,7 +461,7 @@ export default function TypingEngine() {
                               {index === activeIndex && (
                                 <motion.div
                                   layoutId="typing-cursor"
-                                  className={`absolute right-0 bottom-3.5 left-0 h-0.75 rounded-full ${
+                                  className={`absolute right-0 -bottom-3.5 left-0 h-0.75 rounded-full ${
                                     isError ? "bg-destructive" : "bg-foreground"
                                   }`}
                                   transition={{
